@@ -1,0 +1,9 @@
+*.exe
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.res
+*.bmp
+.vscode/
