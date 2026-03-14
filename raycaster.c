@@ -2,139 +2,143 @@
 #include <stdbool.h>
 #include <math.h>
 
-#ifndef M_PI
-    #define M_PI 3.14159265358979323846
-#endif
+#define WIDTH 900
+#define HEIGHT 600
+#define MAP_SIZE 12
 
-#define PLAYER_FOV 80
-
-#define CELL_SIZE 50
-
-#define MAP_WIDTH 5
-#define MAP_HEIGHT 5
-
-#define RAY_STEP_SIZE 0.5 
-#define RENDER_DISTANCE 1000
-
-int map[MAP_HEIGHT][MAP_WIDTH] = {
-    {1, 2, 1, 3, 1},
-    {2, 0, 0, 0, 4},
-    {1, 0, 0, 0, 1},
-    {3, 0, 0, 0, 2},
-    {1, 4, 1, 2, 1},
+int worldMap[MAP_SIZE][MAP_SIZE] = {
+    {1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,2,2,2,0,0,0,3,3,0,1},
+    {1,0,2,0,0,0,0,0,3,0,0,1},
+    {1,0,2,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,4,4,0,0,0,0,1},
+    {1,0,0,0,0,4,4,0,0,2,0,1},
+    {1,0,0,0,0,0,0,0,0,2,0,1},
+    {1,0,3,3,0,0,0,0,0,0,0,1},
+    {1,0,3,0,0,0,0,4,4,0,0,1},
+    {1,0,0,0,0,0,0,4,0,0,0,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1}
 };
 
 typedef struct {
-    double x;
-    double y;
-    double angle;
+    double x, y;
+    double dirX, dirY;
+    double planeX, planeY;
 } Player;
 
-Player player = { .x = 100.0, .y = 100.0, .angle = 0.0 };
-
-Uint32 get_wall_color(int type) {
-    switch(type) {
-        case 1: return 0xFFE63946;
-        case 2: return 0xFF2A9D8F;
-        case 3: return 0xFF457B9D;
-        case 4: return 0xFFF4A261;
-        default: return 0xFFAAAAAA;
+Uint32 get_color(int texNum, int side) {
+    Uint32 color;
+    switch(texNum) {
+        case 1: color = 0xED6A5A; break;
+        case 2: color = 0x9BC1BC; break;
+        case 3: color = 0x5CA4A9; break;
+        case 4: color = 0xF4F1BB; break;
+        default: color = 0x333333; break;
     }
-}
-
-double get_distance(Player p, double angle, int* hit_type) {
-    double ray_x = p.x;
-    double ray_y = p.y;
-    double cos_a = cos(angle);
-    double sin_a = sin(angle);
-
-    while (true) {
-        ray_x += cos_a * RAY_STEP_SIZE;
-        ray_y += sin_a * RAY_STEP_SIZE;
-
-        double ray_distance = sqrt(pow(ray_x - p.x, 2) + pow(ray_y - p.y, 2));
-        if (ray_distance > RENDER_DISTANCE) return -1;
-
-        int cell_x = (int)ray_x / CELL_SIZE;
-        int cell_y = (int)ray_y / CELL_SIZE;
-
-        if (cell_x < 0 || cell_x >= MAP_WIDTH || cell_y < 0 || cell_y >= MAP_HEIGHT) 
-            return -1;
-
-        if (map[cell_y][cell_x] > 0) {
-            *hit_type = map[cell_y][cell_x];
-            return ray_distance;
-        }
+    if (side == 1) {
+        Uint8 r = (color >> 16 & 0xFF) / 2;
+        Uint8 g = (color >> 8 & 0xFF) / 2;
+        Uint8 b = (color & 0xFF) / 2;
+        color = (r << 16) | (g << 8) | b;
     }
-    return -1;
-}
-
-void draw_fov(SDL_Surface* surface, Player p) {
-    int width = surface->w;
-    int height = surface->h;
-    
-    double fov_rad = PLAYER_FOV * M_PI / 180.0;
-    double start_angle = p.angle - (fov_rad / 2.0);
-
-    for (int x = 0; x < width; x++) {
-        double current_angle = start_angle + (x / (double)width) * fov_rad;
-        
-        int hit_type = 0;
-        double dist = get_distance(p, current_angle, &hit_type);
-
-        if (dist > 0) {
-            dist *= cos(current_angle - p.angle);
-
-            int wall_height = (CELL_SIZE * height) / dist;
-            if (wall_height > height) wall_height = height;
-
-            int draw_start = (height / 2) - (wall_height / 2);
-            
-            SDL_Rect wall_slice = { .x = x, .y = draw_start, .w = 1, .h = wall_height };
-            SDL_FillRect(surface, &wall_slice, get_wall_color(hit_type));
-        }
-    }
+    return color;
 }
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
-
-    SDL_Window* window = SDL_CreateWindow("Raycasting Engine",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 900, 600, SDL_WINDOW_RESIZABLE);
-
+    SDL_Window* window = SDL_CreateWindow("Raycaster Engine", 
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_RESIZABLE);
     SDL_Surface* surface = SDL_GetWindowSurface(window);
+
+    Player p = {2, 2, -1, 0, 0, 0.66};
     bool running = true;
 
     while (running) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                running = false;
-            } else if (event.type == SDL_WINDOWEVENT) {
-                if (event.window.event == SDL_WINDOWEVENT_RESIZED || 
-                    event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-                    surface = SDL_GetWindowSurface(window);
-                }
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) running = false;
+            if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_RESIZED)
+                surface = SDL_GetWindowSurface(window);
+        }
+
+        SDL_LockSurface(surface);
+        Uint32* pixels = (Uint32*)surface->pixels;
+        int w = surface->w;
+        int h = surface->h;
+
+        for (int x = 0; x < w; x++) {
+            double cameraX = 2 * x / (double)w - 1;
+            double rayDirX = p.dirX + p.planeX * cameraX;
+            double rayDirY = p.dirY + p.planeY * cameraX;
+
+            int mapX = (int)p.x;
+            int mapY = (int)p.y;
+
+            double deltaDistX = fabs(1 / rayDirX);
+            double deltaDistY = fabs(1 / rayDirY);
+            
+            int stepX, stepY, hit = 0, side;
+            double sideDistX, sideDistY;
+
+            if (rayDirX < 0) { stepX = -1; sideDistX = (p.x - mapX) * deltaDistX; }
+            else { stepX = 1; sideDistX = (mapX + 1.0 - p.x) * deltaDistX; }
+            if (rayDirY < 0) { stepY = -1; sideDistY = (p.y - mapY) * deltaDistY; }
+            else { stepY = 1; sideDistY = (mapY + 1.0 - p.y) * deltaDistY; }
+
+            while (hit == 0) {
+                if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+                else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+                if (worldMap[mapX][mapY] > 0) hit = 1;
+            }
+
+            double perpWallDist = (side == 0) ? (sideDistX - deltaDistX) : (sideDistY - deltaDistY);
+            int lineHeight = (int)(h / perpWallDist);
+
+            int drawStart = -lineHeight / 2 + h / 2;
+            if (drawStart < 0) drawStart = 0;
+            int drawEnd = lineHeight / 2 + h / 2;
+            if (drawEnd >= h) drawEnd = h - 1;
+
+            Uint32 wallColor = get_color(worldMap[mapX][mapY], side);
+
+            for (int y = 0; y < h; y++) {
+                if (y < drawStart) pixels[y * w + x] = 0x222222;
+                else if (y > drawEnd) pixels[y * w + x] = 0x111111;
+                else pixels[y * w + x] = wallColor;
             }
         }
+        SDL_UnlockSurface(surface);
 
-        const Uint8* state = SDL_GetKeyboardState(NULL);
-        if (state[SDL_SCANCODE_W]) {
-            player.x += cos(player.angle) * 3.0;
-            player.y += sin(player.angle) * 3.0;
+        const Uint8* keys = SDL_GetKeyboardState(NULL);
+        double mSpd = 0.08, rSpd = 0.05;
+        if (keys[SDL_SCANCODE_W]) {
+            if (worldMap[(int)(p.x + p.dirX * mSpd)][(int)p.y] == 0) p.x += p.dirX * mSpd;
+            if (worldMap[(int)p.x][(int)(p.y + p.dirY * mSpd)] == 0) p.y += p.dirY * mSpd;
         }
-        if (state[SDL_SCANCODE_S]) {
-            player.x -= cos(player.angle) * 3.0;
-            player.y -= sin(player.angle) * 3.0;
+        if (keys[SDL_SCANCODE_S]) {
+            if (worldMap[(int)(p.x - p.dirX * mSpd)][(int)p.y] == 0) p.x -= p.dirX * mSpd;
+            if (worldMap[(int)p.x][(int)(p.y - p.dirY * mSpd)] == 0) p.y -= p.dirY * mSpd;
         }
-        if (state[SDL_SCANCODE_A]) player.angle -= 0.05;
-        if (state[SDL_SCANCODE_D]) player.angle += 0.05;
-
-        SDL_FillRect(surface, NULL, 0x00000000);
-        draw_fov(surface, player);
+        if (keys[SDL_SCANCODE_D]) {
+            double oldDirX = p.dirX;
+            p.dirX = p.dirX * cos(-rSpd) - p.dirY * sin(-rSpd);
+            p.dirY = oldDirX * sin(-rSpd) + p.dirY * cos(-rSpd);
+            double oldPlaneX = p.planeX;
+            p.planeX = p.planeX * cos(-rSpd) - p.planeY * sin(-rSpd);
+            p.planeY = oldPlaneX * sin(-rSpd) + p.planeY * cos(-rSpd);
+        }
+        if (keys[SDL_SCANCODE_A]) {
+            double oldDirX = p.dirX;
+            p.dirX = p.dirX * cos(rSpd) - p.dirY * sin(rSpd);
+            p.dirY = oldDirX * sin(rSpd) + p.dirY * cos(rSpd);
+            double oldPlaneX = p.planeX;
+            p.planeX = p.planeX * cos(rSpd) - p.planeY * sin(rSpd);
+            p.planeY = oldPlaneX * sin(rSpd) + p.planeY * cos(rSpd);
+        }
 
         SDL_UpdateWindowSurface(window);
-        SDL_Delay(16);
+        SDL_Delay(10);
     }
 
     SDL_DestroyWindow(window);
