@@ -1,10 +1,4 @@
-#include <SDL2/SDL.h>
-#include <stdbool.h>
-#include <math.h>
-
-#define WIDTH 900
-#define HEIGHT 600
-#define MAP_SIZE 12
+#include "raycast.h"
 
 int worldMap[MAP_SIZE][MAP_SIZE] = {
     {1,1,1,1,1,1,1,1,1,1,1,1},
@@ -21,11 +15,6 @@ int worldMap[MAP_SIZE][MAP_SIZE] = {
     {1,1,1,1,1,1,1,1,1,1,1,1}
 };
 
-typedef struct {
-    double x, y;
-    double dirX, dirY;
-    double planeX, planeY;
-} Player;
 
 Uint32 get_color(int texNum, int side) {
     Uint32 color;
